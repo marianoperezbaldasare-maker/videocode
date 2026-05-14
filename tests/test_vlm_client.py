@@ -328,9 +328,10 @@ class TestVLMClient:
         with pytest.raises(ValueError, match="Unknown VLM backend"):
             VLMClient(config)
 
-    def test_create_backend_missing_key_gemini(self) -> None:
+    def test_create_backend_missing_key_gemini(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         config = Config(vlm_backend="gemini")
-        with pytest.raises(ValueError, match="Gemini backend requires vlm_api_key"):
+        with pytest.raises(ValueError, match="Gemini backend requires API key"):
             VLMClient(config)
 
     def test_analyze_single(self, config_ollama: Config, fake_frame: Frame) -> None:
