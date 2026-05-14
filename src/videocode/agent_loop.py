@@ -270,49 +270,46 @@ class AgentLoop:
         self._analyzer = Analyzer(vlm, config)
         self._verifier = Verifier(vlm, config)
 
-    def run(
-        self,
-        task: Task,
-        video: ProcessedVideo,
-        transcription: Optional[Transcription] = None,
-    ) -> AgentResult:
-        """Execute the full 3-role pipeline.
+    def extract_relevant_frames(
+        self, task: Task, video: ProcessedVideo
+    ) -> tuple[List[Frame], List[SourceReference]]:
+        """Run the Extractor phase only: select frames relevant to *task*.
 
-        Returns an :class:`AgentResult` with the final analysis, confidence
-        score, source references, and the number of retries that were needed.
+        Exposed separately so callers can run this in parallel with audio
+        transcription (which has no dependency on the extractor's output).
+        Returns ``(relevant_frames, sources)``; both empty if extraction
+        produced no usable frames.
         """
-        retries = 0
-        sources: List[SourceReference] = []
-
-        # ------------------------------------------------------------------
-        # 1. Extractor — identify relevant frames
-        # ------------------------------------------------------------------
         try:
             relevant_frames = self._extractor.run(task, video)
         except Exception as exc:
             logger.error("Extractor failed: %s", exc)
             relevant_frames = video.frames  # fall back to all frames
 
-        if not relevant_frames:
-            return AgentResult(
-                content="No relevant frames found for the given task.",
-                confidence=0.0,
-                sources=[],
-                retries=0,
+        sources = [
+            SourceReference(
+                timestamp=f.timestamp,
+                frame_path=f.path,
+                description=f"frame at {f.timestamp:.1f}s",
             )
+            for f in relevant_frames
+        ]
+        return relevant_frames, sources
 
-        for f in relevant_frames:
-            sources.append(
-                SourceReference(
-                    timestamp=f.timestamp,
-                    frame_path=f.path,
-                    description=f"frame at {f.timestamp:.1f}s",
-                )
-            )
+    def analyze_and_verify(
+        self,
+        task: Task,
+        relevant_frames: List[Frame],
+        sources: List[SourceReference],
+        transcription: Optional[Transcription] = None,
+    ) -> AgentResult:
+        """Run the Analyzer + Verifier loop on pre-extracted frames.
 
-        # ------------------------------------------------------------------
-        # 2. Analyzer + 3. Verifier loop
-        # ------------------------------------------------------------------
+        Caller is responsible for having run :meth:`extract_relevant_frames`
+        first.  Retries up to ``config.max_retries`` times if the verifier
+        confidence is below :attr:`CONFIDENCE_THRESHOLD`.
+        """
+        retries = 0
         analysis = ""
         confidence = 0.0
 
@@ -354,3 +351,25 @@ class AgentLoop:
             sources=sources,
             retries=retries,
         )
+
+    def run(
+        self,
+        task: Task,
+        video: ProcessedVideo,
+        transcription: Optional[Transcription] = None,
+    ) -> AgentResult:
+        """Execute the full 3-role pipeline sequentially.
+
+        Thin wrapper around :meth:`extract_relevant_frames` and
+        :meth:`analyze_and_verify` for callers that don't need to overlap
+        the extractor phase with other work.
+        """
+        relevant_frames, sources = self.extract_relevant_frames(task, video)
+        if not relevant_frames:
+            return AgentResult(
+                content="No relevant frames found for the given task.",
+                confidence=0.0,
+                sources=[],
+                retries=0,
+            )
+        return self.analyze_and_verify(task, relevant_frames, sources, transcription)

@@ -12,7 +12,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 
 from videocode.agent_loop import AgentLoop, Task, TaskType
 from videocode.audio_extractor import AudioExtractor
@@ -25,6 +25,18 @@ from videocode.vlm_client import VLMClient
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP("videocode")
+
+
+async def _progress(ctx: Optional[Context], pct: float, message: str) -> None:
+    """Best-effort progress notification. Safe when no Context is present
+    (e.g. unit tests that call do_* methods directly).
+    """
+    if ctx is None:
+        return
+    try:
+        await ctx.report_progress(pct, 100.0, message)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("Progress notification failed: %s", exc)
 
 _server: "ClaudeVisionMCPServer | None" = None
 
@@ -120,11 +132,13 @@ class ClaudeVisionMCPServer:
         style: str = "detailed",
         mode: str = "auto",
         skip_audio: bool = False,
+        ctx: Optional[Context] = None,
     ) -> dict[str, Any]:
         """Process a video through the full pipeline."""
         loop = asyncio.get_event_loop()
         strategy = self._resolve_strategy(mode)
 
+        await _progress(ctx, 5.0, "Downloading and extracting frames")
         try:
             processed = await loop.run_in_executor(
                 None, self.video_processor.process, source, strategy
@@ -135,27 +149,69 @@ class ClaudeVisionMCPServer:
                 "status": "error",
                 "message": f"Failed to process video: {exc}",
             }
+        await _progress(ctx, 30.0, f"Extracted {len(processed.frames)} frames")
 
-        transcription = None
-        if self.config.extract_audio and not skip_audio:
+        task = Task(type=task_type, query=query or style)
+
+        # Audio transcription and the Extractor phase have no data
+        # dependency on each other — run them in parallel. The Analyzer
+        # (which needs both) waits on the gather().
+        async def _run_audio() -> Any:
+            if not (self.config.extract_audio and not skip_audio):
+                return None
             # IMPORTANT: use processed.local_path (the actual downloaded
             # file), not Path(source) — for YouTube URLs source has no
             # local presence so passing it would silently break audio.
             video_file = processed.local_path or Path(source)
             try:
+                await _progress(ctx, 40.0, "Extracting audio")
                 audio_path = await loop.run_in_executor(
                     None, self.audio_extractor.extract, video_file
                 )
-                transcription = await loop.run_in_executor(
+                await _progress(ctx, 55.0, "Transcribing audio with Whisper")
+                return await loop.run_in_executor(
                     None, self.audio_extractor.transcribe, audio_path
                 )
             except Exception as exc:
                 logger.warning("Audio extraction failed (non-fatal): %s", exc)
+                return None
+
+        async def _run_extractor() -> Any:
+            await _progress(ctx, 40.0, "Selecting relevant frames")
+            return await loop.run_in_executor(
+                None, self.agent.extract_relevant_frames, task, processed
+            )
 
         try:
-            task = Task(type=task_type, query=query or style)
+            (relevant_frames, sources), transcription = await asyncio.gather(
+                _run_extractor(), _run_audio()
+            )
+        except Exception as exc:
+            logger.error("Parallel extract/audio failed: %s", exc)
+            return {
+                "status": "error",
+                "message": f"Analysis failed: {exc}",
+            }
+
+        if not relevant_frames:
+            await _progress(ctx, 100.0, "No relevant frames found")
+            return {
+                "status": "ok",
+                "confidence": 0.0,
+                "content": "No relevant frames found for the given task.",
+                "timestamps": [],
+                "duration": getattr(processed, "duration", 0.0),
+            }
+
+        await _progress(ctx, 70.0, "Analyzing and verifying")
+        try:
             result = await loop.run_in_executor(
-                None, self.agent.run, task, processed, transcription
+                None,
+                self.agent.analyze_and_verify,
+                task,
+                relevant_frames,
+                sources,
+                transcription,
             )
         except Exception as exc:
             logger.error("Agent loop failed: %s", exc)
@@ -163,6 +219,7 @@ class ClaudeVisionMCPServer:
                 "status": "error",
                 "message": f"Analysis failed: {exc}",
             }
+        await _progress(ctx, 100.0, "Done")
 
         timestamps = [
             {"time": src.timestamp, "description": src.description}
@@ -178,13 +235,18 @@ class ClaudeVisionMCPServer:
         }
 
     async def do_video_analyze(
-        self, source: str, query: str = "", mode: str = "auto"
+        self,
+        source: str,
+        query: str = "",
+        mode: str = "auto",
+        ctx: Optional[Context] = None,
     ) -> dict[str, Any]:
         result = await self._process_video(
             source=source,
             task_type=TaskType.GENERAL,
             query=query,
             mode=mode,
+            ctx=ctx,
         )
 
         if result["status"] == "error":
@@ -197,9 +259,12 @@ class ClaudeVisionMCPServer:
             "confidence": result["confidence"],
         }
 
-    async def do_video_extract_code(self, source: str) -> dict[str, Any]:
+    async def do_video_extract_code(
+        self, source: str, ctx: Optional[Context] = None
+    ) -> dict[str, Any]:
         loop = asyncio.get_event_loop()
 
+        await _progress(ctx, 5.0, "Downloading and extracting frames")
         try:
             processed = await loop.run_in_executor(
                 None, self.video_processor.process, source
@@ -210,21 +275,25 @@ class ClaudeVisionMCPServer:
                 "status": "error",
                 "message": f"Failed to process video: {exc}",
             }
+        await _progress(ctx, 35.0, f"Extracted {len(processed.frames)} frames")
 
         transcription = None
         if self.config.extract_audio:
             # Use the resolved local path so YouTube URLs work too.
             video_file = processed.local_path or Path(source)
             try:
+                await _progress(ctx, 40.0, "Extracting audio")
                 audio_path = await loop.run_in_executor(
                     None, self.audio_extractor.extract, video_file
                 )
+                await _progress(ctx, 50.0, "Transcribing audio with Whisper")
                 transcription = await loop.run_in_executor(
                     None, self.audio_extractor.transcribe, audio_path
                 )
             except Exception as exc:
                 logger.warning("Audio extraction failed (non-fatal): %s", exc)
 
+        await _progress(ctx, 65.0, "Extracting code from frames")
         try:
             code_result = await loop.run_in_executor(
                 None, self.code_extractor.extract, processed, transcription
@@ -235,6 +304,7 @@ class ClaudeVisionMCPServer:
                 "status": "error",
                 "message": f"Code extraction failed: {exc}",
             }
+        await _progress(ctx, 100.0, "Done")
 
         return {
             "files": code_result.files,
@@ -245,13 +315,18 @@ class ClaudeVisionMCPServer:
         }
 
     async def do_video_summarize(
-        self, source: str, style: str = "detailed", mode: str = "auto"
+        self,
+        source: str,
+        style: str = "detailed",
+        mode: str = "auto",
+        ctx: Optional[Context] = None,
     ) -> dict[str, Any]:
         result = await self._process_video(
             source=source,
             task_type=TaskType.SUMMARIZATION,
             style=style,
             mode=mode,
+            ctx=ctx,
         )
 
         if result["status"] == "error":
@@ -271,13 +346,18 @@ class ClaudeVisionMCPServer:
         }
 
     async def do_video_find_bugs(
-        self, source: str, description: str = "", mode: str = "auto"
+        self,
+        source: str,
+        description: str = "",
+        mode: str = "auto",
+        ctx: Optional[Context] = None,
     ) -> dict[str, Any]:
         result = await self._process_video(
             source=source,
             task_type=TaskType.BUG_FINDING,
             query=description,
             mode=mode,
+            ctx=ctx,
         )
 
         if result["status"] == "error":
@@ -345,7 +425,7 @@ class ClaudeVisionMCPServer:
         }
 
     async def do_video_extract_text(
-        self, source: str, query: str = ""
+        self, source: str, query: str = "", ctx: Optional[Context] = None
     ) -> dict[str, Any]:
         """OCR-focused tool: read all visible text from a video.
 
@@ -369,6 +449,7 @@ class ClaudeVisionMCPServer:
             query=ocr_query,
             mode="tutorial",
             skip_audio=True,
+            ctx=ctx,
         )
 
         if result["status"] == "error":
@@ -415,7 +496,7 @@ class ClaudeVisionMCPServer:
 
 @mcp.tool()
 async def video_analyze(
-    source: str, query: str = "", mode: str = "auto"
+    source: str, query: str = "", mode: str = "auto", ctx: Optional[Context] = None
 ) -> dict[str, Any]:
     """Analyze a video and answer questions about its content.
 
@@ -433,11 +514,13 @@ async def video_analyze(
     Returns:
         Dictionary with summary, details, and relevant timestamps.
     """
-    return await _get_server().do_video_analyze(source, query, mode)
+    return await _get_server().do_video_analyze(source, query, mode, ctx=ctx)
 
 
 @mcp.tool()
-async def video_extract_code(source: str) -> dict[str, Any]:
+async def video_extract_code(
+    source: str, ctx: Optional[Context] = None
+) -> dict[str, Any]:
     """Extract code from a coding tutorial video.
 
     Process the video to detect code frames, extract code blocks,
@@ -450,12 +533,15 @@ async def video_extract_code(source: str) -> dict[str, Any]:
         Dictionary with files, language, description, setup instructions,
         and confidence score.
     """
-    return await _get_server().do_video_extract_code(source)
+    return await _get_server().do_video_extract_code(source, ctx=ctx)
 
 
 @mcp.tool()
 async def video_summarize(
-    source: str, style: str = "detailed", mode: str = "auto"
+    source: str,
+    style: str = "detailed",
+    mode: str = "auto",
+    ctx: Optional[Context] = None,
 ) -> dict[str, Any]:
     """Generate a summary of a video.
 
@@ -470,12 +556,15 @@ async def video_summarize(
     Returns:
         Dictionary with summary text, key points list, and duration.
     """
-    return await _get_server().do_video_summarize(source, style, mode)
+    return await _get_server().do_video_summarize(source, style, mode, ctx=ctx)
 
 
 @mcp.tool()
 async def video_find_bugs(
-    source: str, description: str = "", mode: str = "auto"
+    source: str,
+    description: str = "",
+    mode: str = "auto",
+    ctx: Optional[Context] = None,
 ) -> dict[str, Any]:
     """Analyze a screen recording for bugs and issues.
 
@@ -491,7 +580,7 @@ async def video_find_bugs(
         Dictionary with found bugs, severity assessment, and
         recommendations.
     """
-    return await _get_server().do_video_find_bugs(source, description, mode)
+    return await _get_server().do_video_find_bugs(source, description, mode, ctx=ctx)
 
 
 @mcp.tool()
@@ -515,7 +604,9 @@ async def video_find_source_repo(source: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def video_extract_text(source: str, query: str = "") -> dict[str, Any]:
+async def video_extract_text(
+    source: str, query: str = "", ctx: Optional[Context] = None
+) -> dict[str, Any]:
     """Extract all visible text from a video (OCR mode).
 
     Optimized for screen recordings, slide decks, coding tutorials,
@@ -531,7 +622,7 @@ async def video_extract_text(source: str, query: str = "") -> dict[str, Any]:
         Dictionary with extracted text, timestamps, duration, and
         confidence score.
     """
-    return await _get_server().do_video_extract_text(source, query)
+    return await _get_server().do_video_extract_text(source, query, ctx=ctx)
 
 
 @mcp.tool()
