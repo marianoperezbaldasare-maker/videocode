@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# claude-vision specific
+output/
+temp/
+*.mp4
+*.avi
+*.mov
+downloads/
+.claude-vision/
+
+# Secrets — never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local claude-config with real API keys (use claude-config.example.json as template)
+claude-config.json
+
+# Local Claude Code settings (may contain personal allow-rules with secrets)
+.claude/settings.local.json
+.claude/settings.json
+!.claude/settings.example.json
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db

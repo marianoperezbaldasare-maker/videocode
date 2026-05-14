@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "videocode": {
+      "command": "videocode",
+      "args": ["mcp"],
+      "env": {
+        "GEMINI_API_KEY": "<your-gemini-api-key-here>",
+        "VIDEOCODE_VLM_BACKEND": "gemini",
+        "VIDEOCODE_VLM_MODEL": "gemini-2.5-flash"
+      }
+    }
+  }
+}
