@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any
 
 # Persistent cache for downloaded remote videos. Keyed by SHA-256 of URL
 # so repeated runs against the same source are instant.
@@ -54,7 +54,7 @@ except ImportError:
 
 # Optional: Apify for YouTube downloading
 try:
-    from videocode.apify_client import ApifyClient, create_apify_client_from_env
+    from videocode.apify_client import create_apify_client_from_env
     _HAS_APIFY = True
 except ImportError:
     _HAS_APIFY = False
@@ -123,22 +123,22 @@ class ProcessedVideo:
     fps: float
     """Average frames per second."""
 
-    resolution: Tuple[int, int]
+    resolution: tuple[int, int]
     """Video resolution as ``(width, height)``."""
 
-    frames: List[Frame]
+    frames: list[Frame]
     """List of extracted / selected frames."""
 
     frame_dir: Path
     """Directory containing the extracted frame images."""
 
-    audio_path: Optional[Path] = None
+    audio_path: Path | None = None
     """Path to the extracted audio WAV file, if any."""
 
-    scenes: List[Scene] = field(default_factory=list)
+    scenes: list[Scene] = field(default_factory=list)
     """Detected scene boundaries, if scene detection was performed."""
 
-    local_path: Optional[Path] = None
+    local_path: Path | None = None
     """Filesystem path to the (possibly downloaded) video file.
 
     For local sources this equals ``Path(source)``. For remote URLs it
@@ -165,9 +165,9 @@ class VideoProcessor:
         vp.cleanup()
     """
 
-    def __init__(self, config: "Config") -> None:
+    def __init__(self, config: Config) -> None:
         self.config = config
-        self.temp_dir: Optional[Path] = None
+        self.temp_dir: Path | None = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -175,8 +175,8 @@ class VideoProcessor:
 
     def process(
         self,
-        source: Union[str, Path],
-        strategy: "SelectionStrategy" = None,  # type: ignore[assignment]
+        source: str | Path,
+        strategy: SelectionStrategy = None,  # type: ignore[assignment]
     ) -> ProcessedVideo:
         """Process a video source end-to-end.
 
@@ -236,9 +236,9 @@ class VideoProcessor:
     def extract_frames(
         self,
         video_path: Path,
-        timestamps: List[float],
-        output_dir: Optional[Path] = None,
-    ) -> List[Frame]:
+        timestamps: list[float],
+        output_dir: Path | None = None,
+    ) -> list[Frame]:
         """Extract JPEG frames at specific timestamps using FFmpeg.
 
         Args:
@@ -262,7 +262,7 @@ class VideoProcessor:
         frame_dir = output_dir or self._get_or_create_frame_dir()
         frame_dir.mkdir(parents=True, exist_ok=True)
 
-        frames: List[Frame] = []
+        frames: list[Frame] = []
         width, height = self.config.frame_resolution
         quality = max(1, min(100, self.config.frame_quality))
 
@@ -285,8 +285,7 @@ class VideoProcessor:
             logger.debug("FFmpeg extract frame @ %.2fs -> %s", ts, out_path)
             result = subprocess.run(
                 cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
                 check=False,
             )
@@ -301,7 +300,7 @@ class VideoProcessor:
         logger.info("Extracted %d/%d frames", len(frames), len(timestamps))
         return frames
 
-    def detect_scenes(self, video_path: Path) -> List[Scene]:
+    def detect_scenes(self, video_path: Path) -> list[Scene]:
         """Detect scene boundaries using *PySceneDetect*.
 
         The method uses the :class:`AdaptiveDetector` with the
@@ -347,7 +346,7 @@ class VideoProcessor:
             logger.error("Scene detection failed: %s", exc)
             return []
 
-        scenes: List[Scene] = []
+        scenes: list[Scene] = []
         for idx, (start, end) in enumerate(scene_list):
             # FrameTimecodes have get_seconds() method
             start_s = (
@@ -477,7 +476,7 @@ class VideoProcessor:
         return _DOWNLOAD_CACHE_DIR / url_hash
 
     @staticmethod
-    def _find_cached_video(cache_dir: Path) -> Optional[Path]:
+    def _find_cached_video(cache_dir: Path) -> Path | None:
         """Return a previously-downloaded video file in *cache_dir*, or None."""
         if not cache_dir.exists():
             return None
@@ -486,7 +485,7 @@ class VideoProcessor:
                 return entry
         return None
 
-    def _probe_metadata(self, video_path: Path) -> Tuple[float, float, Tuple[int, int]]:
+    def _probe_metadata(self, video_path: Path) -> tuple[float, float, tuple[int, int]]:
         """Probe video metadata using ``ffprobe``.
 
         Returns:
@@ -506,8 +505,7 @@ class VideoProcessor:
 
         result = subprocess.run(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             check=False,
         )

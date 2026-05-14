@@ -14,10 +14,9 @@ import logging
 import shutil
 import subprocess
 import tempfile
-import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from videocode.config import Config
@@ -51,7 +50,7 @@ class Transcription:
     text: str
     """Full concatenated transcript text."""
 
-    segments: List[Segment] = field(default_factory=list)
+    segments: list[Segment] = field(default_factory=list)
     """Individual timed segments."""
 
     language: str = "en"
@@ -92,16 +91,16 @@ class AudioExtractor:
         extractor.cleanup()
     """
 
-    def __init__(self, config: "Config") -> None:
+    def __init__(self, config: Config) -> None:
         self.config = config
-        self._temp_dir: Optional[Path] = None
-        self._audio_path: Optional[Path] = None
+        self._temp_dir: Path | None = None
+        self._audio_path: Path | None = None
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def extract(self, video_path: Path) -> Optional[Path]:
+    def extract(self, video_path: Path) -> Path | None:
         """Extract the audio track from *video_path* to a mono WAV file.
 
         The output is a 16 kHz mono WAV — the format expected by Whisper
@@ -155,8 +154,7 @@ class AudioExtractor:
         logger.info("Extracting audio from %s -> %s", video_path.name, out_path)
         result = subprocess.run(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             check=False,
         )
@@ -257,8 +255,8 @@ class AudioExtractor:
             raise TranscriptionError(f"Transcription failed: {exc}") from exc
 
         detected_language = info.language if hasattr(info, "language") else "en"
-        segments_list: List[Segment] = []
-        full_text_parts: List[str] = []
+        segments_list: list[Segment] = []
+        full_text_parts: list[str] = []
 
         for seg in segments:
             seg_obj = Segment(
@@ -302,7 +300,7 @@ class AudioExtractor:
             raise TranscriptionError(f"Transcription failed: {exc}") from exc
 
         detected_language = result.get("language", "en")
-        segments_list: List[Segment] = []
+        segments_list: list[Segment] = []
 
         for seg in result.get("segments", []):
             segments_list.append(
@@ -346,8 +344,7 @@ class AudioExtractor:
 
         result = subprocess.run(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             check=False,
         )

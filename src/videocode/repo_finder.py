@@ -16,7 +16,6 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from typing import List, Optional
 
 try:
     import yt_dlp  # type: ignore[import-untyped]
@@ -71,7 +70,7 @@ class RepoCandidate:
     ``uploader_url``, ``channel_url``, etc."""
 
 
-def find_repos_in_text(text: Optional[str], source: str = "text") -> List[RepoCandidate]:
+def find_repos_in_text(text: str | None, source: str = "text") -> list[RepoCandidate]:
     """Extract all GitHub/GitLab repo references from a blob of *text*.
 
     Deduplicates by (owner, repo) — the same repo mentioned several
@@ -110,7 +109,7 @@ def find_repos_in_text(text: Optional[str], source: str = "text") -> List[RepoCa
     return candidates
 
 
-def find_repos_for_url(url: str, *, timeout: float = 15.0) -> List[RepoCandidate]:
+def find_repos_for_url(url: str, *, timeout: float = 15.0) -> list[RepoCandidate]:
     """Discover source-code repos referenced from a video *url*.
 
     Uses yt-dlp to fetch metadata only (no download) and scans the

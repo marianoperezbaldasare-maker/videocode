@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import io
 import json
 import logging
 import time
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from videocode.types import Config, Frame, Transcription, VLMResponse
 
@@ -21,14 +21,14 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # Maps backend name → (env var name, api key field name)
-_API_KEY_ENVS: Dict[str, str] = {
+_API_KEY_ENVS: dict[str, str] = {
     "gemini": "GEMINI_API_KEY",
     "openai": "OPENAI_API_KEY",
     "qwen": "QWEN_API_KEY",
 }
 
 
-def _load_env_key(backend: str) -> Optional[str]:
+def _load_env_key(backend: str) -> str | None:
     """Load an API key from a standard environment variable for *backend*."""
     import os
     env_name = _API_KEY_ENVS.get(backend.lower())
@@ -45,7 +45,7 @@ def _load_env_key(backend: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
-def _frame_to_base64(frame: Frame, max_size: Tuple[int, int] = (1024, 1024)) -> str:
+def _frame_to_base64(frame: Frame, max_size: tuple[int, int] = (1024, 1024)) -> str:
     """Convert a frame to a base64-encoded PNG.
 
     Resizes the image if either dimension exceeds *max_size* to keep token
@@ -53,8 +53,8 @@ def _frame_to_base64(frame: Frame, max_size: Tuple[int, int] = (1024, 1024)) -> 
     """
     try:
         from PIL import Image
-    except ImportError:  # pragma: no cover
-        raise ImportError("Pillow is required for image encoding: pip install Pillow")
+    except ImportError as err:  # pragma: no cover
+        raise ImportError("Pillow is required for image encoding: pip install Pillow") from err
 
     img = Image.open(frame.path)
     if img.mode in ("RGBA", "P"):
@@ -82,15 +82,15 @@ class _ResponseCache:
     """LRU-ish cache for VLM responses keyed by (frame_hashes + prompt)."""
 
     def __init__(self, max_size: int = 128) -> None:
-        self._store: Dict[str, VLMResponse] = {}
-        self._order: List[str] = []
+        self._store: dict[str, VLMResponse] = {}
+        self._order: list[str] = []
         self._max = max_size
 
     def _key(
         self,
-        frames: List[Frame],
+        frames: list[Frame],
         prompt: str,
-        transcription: Optional[Transcription] = None,
+        transcription: Transcription | None = None,
     ) -> str:
         hasher = hashlib.sha256()
         for f in frames:
@@ -103,18 +103,18 @@ class _ResponseCache:
 
     def get(
         self,
-        frames: List[Frame],
+        frames: list[Frame],
         prompt: str,
-        transcription: Optional[Transcription] = None,
-    ) -> Optional[VLMResponse]:
+        transcription: Transcription | None = None,
+    ) -> VLMResponse | None:
         k = self._key(frames, prompt, transcription)
         return self._store.get(k)
 
     def put(
         self,
-        frames: List[Frame],
+        frames: list[Frame],
         prompt: str,
-        transcription: Optional[Transcription],
+        transcription: Transcription | None,
         response: VLMResponse,
     ) -> None:
         k = self._key(frames, prompt, transcription)
@@ -137,7 +137,7 @@ class VLMBackend(ABC):
     """Abstract base for VLM backends."""
 
     @abstractmethod
-    def chat(self, images_b64: List[str], prompt: str) -> VLMResponse:
+    def chat(self, images_b64: list[str], prompt: str) -> VLMResponse:
         """Send images + prompt to the model and return the response."""
         ...
 
@@ -170,13 +170,13 @@ class OllamaBackend(VLMBackend):
                 import ollama
 
                 self._client = ollama.Client(host=self.base_url)
-            except ImportError:  # pragma: no cover
+            except ImportError as err:  # pragma: no cover
                 raise ImportError(
                     "ollama package required for Ollama backend: pip install ollama"
-                )
+                ) from err
         return self._client
 
-    def chat(self, images_b64: List[str], prompt: str) -> VLMResponse:
+    def chat(self, images_b64: list[str], prompt: str) -> VLMResponse:
         client = self._get_client()
         messages = [
             {
@@ -224,11 +224,11 @@ class GeminiBackend(VLMBackend):
 
             genai.configure(api_key=self.api_key)
             self._model = genai.GenerativeModel(self.model_name)
-        except ImportError:  # pragma: no cover
+        except ImportError as err:  # pragma: no cover
             raise ImportError(
                 "google-generativeai required for Gemini backend: "
                 "pip install google-generativeai"
-            )
+            ) from err
 
     def _b64_to_pil(self, b64: str) -> Any:
         from PIL import Image
@@ -236,8 +236,8 @@ class GeminiBackend(VLMBackend):
         data = base64.b64decode(b64)
         return Image.open(io.BytesIO(data))
 
-    def chat(self, images_b64: List[str], prompt: str) -> VLMResponse:
-        contents: List[Any] = [prompt]
+    def chat(self, images_b64: list[str], prompt: str) -> VLMResponse:
+        contents: list[Any] = [prompt]
         for b64 in images_b64:
             contents.append(self._b64_to_pil(b64))
 
@@ -247,10 +247,8 @@ class GeminiBackend(VLMBackend):
         )
         text = response.text if hasattr(response, "text") else str(response)
         token_count = 0
-        try:
+        with contextlib.suppress(Exception):
             token_count = response.usage_metadata.total_token_count
-        except Exception:
-            pass
         return VLMResponse(
             content=text,
             model=self.model_name,
@@ -263,10 +261,7 @@ class GeminiBackend(VLMBackend):
             import google.generativeai as genai
 
             # A lightweight call to verify the key works
-            for m in genai.list_models():
-                if "gemini" in m.name:
-                    return True
-            return False
+            return any("gemini" in m.name for m in genai.list_models())
         except Exception:
             return False
 
@@ -285,15 +280,15 @@ class OpenAIBackend(VLMBackend):
                 from openai import OpenAI
 
                 self._client = OpenAI(api_key=self.api_key)
-            except ImportError:  # pragma: no cover
+            except ImportError as err:  # pragma: no cover
                 raise ImportError(
                     "openai package required for OpenAI backend: pip install openai"
-                )
+                ) from err
         return self._client
 
-    def chat(self, images_b64: List[str], prompt: str) -> VLMResponse:
+    def chat(self, images_b64: list[str], prompt: str) -> VLMResponse:
         client = self._get_client()
-        content: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
+        content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
         for b64 in images_b64:
             content.append(
                 {
@@ -333,7 +328,7 @@ class QwenBackend(VLMBackend):
     base URL from ``Config.vlm_base_url`` when ``VLMClient`` instantiates it.
     """
 
-    def __init__(self, api_key: str, model: str, base_url: Optional[str] = None) -> None:
+    def __init__(self, api_key: str, model: str, base_url: str | None = None) -> None:
         self.api_key = api_key
         self.model = model
         self.base_url = base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -348,15 +343,15 @@ class QwenBackend(VLMBackend):
                     api_key=self.api_key,
                     base_url=self.base_url,
                 )
-            except ImportError:  # pragma: no cover
+            except ImportError as err:  # pragma: no cover
                 raise ImportError(
                     "openai package required for Qwen backend: pip install openai"
-                )
+                ) from err
         return self._client
 
-    def chat(self, images_b64: List[str], prompt: str) -> VLMResponse:
+    def chat(self, images_b64: list[str], prompt: str) -> VLMResponse:
         client = self._get_client()
-        content: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
+        content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
         for b64 in images_b64:
             content.append(
                 {
@@ -406,7 +401,7 @@ class DummyBackend(VLMBackend):
     def __init__(self) -> None:
         self._call_count = 0
 
-    def chat(self, images_b64: List[str], prompt: str) -> VLMResponse:
+    def chat(self, images_b64: list[str], prompt: str) -> VLMResponse:
         self._call_count += 1
         logger.info("DummyBackend: call #%d (prompt: %s...)", self._call_count, prompt[:80])
 
@@ -576,7 +571,7 @@ def _retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0):
 
     def decorator(func):
         def wrapper(*args, **kwargs):  # type: ignore[no-untyped-def]
-            last_exc: Optional[Exception] = None
+            last_exc: Exception | None = None
             for attempt in range(max_retries + 1):
                 try:
                     return func(*args, **kwargs)
@@ -676,9 +671,9 @@ class VLMClient:
 
     def analyze_frames(
         self,
-        frames: List[Frame],
+        frames: list[Frame],
         prompt: str,
-        transcription: Optional[Transcription] = None,
+        transcription: Transcription | None = None,
     ) -> VLMResponse:
         """Send *frames* + *prompt* to the VLM and return a structured response.
 

@@ -11,12 +11,12 @@ import logging
 import subprocess
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from videocode.config import Config
 
-from videocode.video_processor import Frame, Scene, VideoProcessor
+from videocode.video_processor import Frame, VideoProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class FrameSelector:
         frames = selector.select_frames(Path("video.mp4"))
     """
 
-    def __init__(self, config: "Config") -> None:
+    def __init__(self, config: Config) -> None:
         self.config = config
 
     # ------------------------------------------------------------------
@@ -83,8 +83,8 @@ class FrameSelector:
     def select_frames(
         self,
         video_path: Path,
-        strategy: Optional[SelectionStrategy] = None,
-    ) -> List[Frame]:
+        strategy: SelectionStrategy | None = None,
+    ) -> list[Frame]:
         """Select frames from *video_path* using the given *strategy*.
 
         The returned list is sorted by timestamp and never exceeds
@@ -177,7 +177,7 @@ class FrameSelector:
     def estimate_optimal_frame_count(
         self,
         duration: float,
-        resolution: Tuple[int, int],
+        resolution: tuple[int, int],
     ) -> int:
         """Calculate the optimal number of frames for a video.
 
@@ -199,11 +199,11 @@ class FrameSelector:
         # Start with target-fps based estimate
         fps_based = max(1, int(duration * self.config.target_fps))
 
-        # Token-budget based ceiling  
+        # Token-budget based ceiling
         # Heuristic: assume a ~16k token budget for frames
-        TOKEN_BUDGET_CEILING = 16384
+        token_budget_ceiling = 16384
         tokens_per_frame = max(1, self.calculate_token_budget(1))
-        token_based = max(1, TOKEN_BUDGET_CEILING // tokens_per_frame)
+        token_based = max(1, token_budget_ceiling // tokens_per_frame)
 
         count = min(fps_based, token_based, max_frames)
         count = max(count, min(3, max_frames))  # at least a few frames
@@ -240,7 +240,7 @@ class FrameSelector:
 
     def _select_scene_frames(
         self, video_path: Path, target_count: int
-    ) -> List[Frame]:
+    ) -> list[Frame]:
         """Select one frame per detected scene.
 
         When there are more scenes than *target_count*, the list is
@@ -265,7 +265,7 @@ class FrameSelector:
 
     def _select_uniform_frames(
         self, video_path: Path, duration: float, target_count: int
-    ) -> List[Frame]:
+    ) -> list[Frame]:
         """Sample *target_count* frames evenly across the video duration."""
         if duration <= 0:
             logger.warning("Invalid duration (%.2f) — using single frame", duration)
@@ -283,7 +283,7 @@ class FrameSelector:
 
     def _select_keyframe_frames(
         self, video_path: Path, target_count: int
-    ) -> List[Frame]:
+    ) -> list[Frame]:
         """Extract FFmpeg keyframe (I-frame) timestamps, then sample."""
         timestamps = self._probe_keyframes(video_path)
         if not timestamps:
@@ -302,12 +302,12 @@ class FrameSelector:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _probe_metadata(self, video_path: Path) -> Tuple[float, float, Tuple[int, int]]:
+    def _probe_metadata(self, video_path: Path) -> tuple[float, float, tuple[int, int]]:
         """Delegate to :class:`VideoProcessor` for metadata probing."""
         processor = VideoProcessor(self.config)
         return processor._probe_metadata(video_path)
 
-    def _probe_keyframes(self, video_path: Path) -> List[float]:
+    def _probe_keyframes(self, video_path: Path) -> list[float]:
         """Return a list of keyframe timestamps using ffprobe.
 
         Returns an empty list on any error.
@@ -328,8 +328,7 @@ class FrameSelector:
 
         result = subprocess.run(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             check=False,
         )
@@ -341,7 +340,7 @@ class FrameSelector:
             import json
 
             data = json.loads(result.stdout)
-            timestamps: List[float] = []
+            timestamps: list[float] = []
             for frame in data.get("frames", []):
                 if frame.get("pict_type") == "I":
                     ts_raw = frame.get("pkt_pts_time") or frame.get("pkt_dts_time")
@@ -353,7 +352,7 @@ class FrameSelector:
             return []
 
     @staticmethod
-    def _evenly_downsample(frames: List[Frame], target: int) -> List[Frame]:
+    def _evenly_downsample(frames: list[Frame], target: int) -> list[Frame]:
         """Return *target* frames spread uniformly across *frames*."""
         if len(frames) <= target:
             return frames

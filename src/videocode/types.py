@@ -5,12 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 # Re-export Config from the canonical location so legacy imports like
 # `from videocode.types import Config` keep working.
 from videocode.config import Config  # noqa: F401
-
 
 # ---------------------------------------------------------------------------
 # Video Processing
@@ -42,10 +40,10 @@ class ProcessedVideo:
     source: str
     duration: float
     fps: float
-    resolution: Tuple[int, int]
-    frames: List[Frame]
+    resolution: tuple[int, int]
+    frames: list[Frame]
     frame_dir: Path
-    audio_path: Optional[Path] = None
+    audio_path: Path | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +64,7 @@ class Transcription:
     """Full transcription result."""
 
     text: str
-    segments: List[Segment]
+    segments: list[Segment]
     language: str = "en"
 
 
@@ -120,7 +118,7 @@ class AgentResult:
 
     content: str
     confidence: float = 0.0
-    sources: List[SourceReference] = field(default_factory=list)
+    sources: list[SourceReference] = field(default_factory=list)
     retries: int = 0
 
 
@@ -145,14 +143,14 @@ class CodeBlock:
     filename: str
     content: str
     language: str = ""
-    source_timestamps: List[float] = field(default_factory=list)
+    source_timestamps: list[float] = field(default_factory=list)
 
 
 @dataclass
 class CodeResult:
     """Result of extracting code from a video."""
 
-    files: Dict[str, str] = field(default_factory=dict)
+    files: dict[str, str] = field(default_factory=dict)
     language: str = ""
     description: str = ""
     setup_instructions: str = ""

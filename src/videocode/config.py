@@ -11,9 +11,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class Config:
         for key in annotations:
             env_name = f"VIDEOCODE_{key.upper()}"
             raw_value = os.environ.get(env_name)
-            
+
             # Also check standard env var names for integrations
             if raw_value is None:
                 if key == "apify_api_token":
@@ -50,7 +50,7 @@ class Config:
                         raw_value = os.environ.get("OPENAI_API_KEY")
                     elif self.vlm_backend == "qwen":
                         raw_value = os.environ.get("QWEN_API_KEY")
-            
+
             if raw_value is None:
                 continue
 
@@ -77,10 +77,10 @@ class Config:
     vlm_model: str = "llava"
     """Model name to use with the selected VLM backend."""
 
-    vlm_api_key: Optional[str] = None
+    vlm_api_key: str | None = None
     """API key for cloud-based VLM backends (Gemini, OpenAI, Qwen)."""
 
-    vlm_base_url: Optional[str] = None
+    vlm_base_url: str | None = None
     """Custom base URL for the VLM API endpoint."""
 
     # ------------------------------------------------------------------
@@ -92,13 +92,13 @@ class Config:
     # ------------------------------------------------------------------
     # Optional: Apify (YouTube downloading)
     # ------------------------------------------------------------------
-    apify_api_token: Optional[str] = None
+    apify_api_token: str | None = None
     """Apify API token for YouTube video downloading."""
 
     # ------------------------------------------------------------------
     # Optional: Perplexity (code verification)
     # ------------------------------------------------------------------
-    perplexity_api_key: Optional[str] = None
+    perplexity_api_key: str | None = None
     """Perplexity API key for code verification and documentation lookup."""
 
     # ------------------------------------------------------------------
@@ -117,7 +117,7 @@ class Config:
     frame_quality: int = 85
     """JPEG quality factor for extracted frames (0-100)."""
 
-    frame_resolution: Tuple[int, int] = (1280, 720)
+    frame_resolution: tuple[int, int] = (1280, 720)
     """Target frame resolution as ``(width, height)``."""
 
     scene_threshold: float = 30.0
@@ -157,7 +157,7 @@ class Config:
     # Factory methods
     # ------------------------------------------------------------------
     @classmethod
-    def from_env(cls) -> "Config":
+    def from_env(cls) -> Config:
         """Build a :class:`Config` from environment variables.
 
         Every field can be set via an environment variable prefixed with
@@ -176,7 +176,7 @@ class Config:
         for key in annotations:
             env_name = f"VIDEOCODE_{key.upper()}"
             raw_value = os.environ.get(env_name)
-            
+
             # Also check standard env var names for integrations
             if raw_value is None:
                 if key == "apify_api_token":
@@ -190,7 +190,7 @@ class Config:
                         raw_value = os.environ.get("GEMINI_API_KEY")
                     elif backend == "openai":
                         raw_value = os.environ.get("OPENAI_API_KEY")
-            
+
             if raw_value is None:
                 continue
 
@@ -211,7 +211,7 @@ class Config:
         return instance
 
     @classmethod
-    def from_file(cls, path: str) -> "Config":
+    def from_file(cls, path: str) -> Config:
         """Build a :class:`Config` from a JSON configuration file.
 
         The JSON file should contain top-level keys that match the

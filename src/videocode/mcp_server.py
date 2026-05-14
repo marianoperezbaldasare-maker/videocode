@@ -10,7 +10,7 @@ import asyncio
 import logging
 import shutil
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 mcp = FastMCP("videocode")
 
 
-async def _progress(ctx: Optional[Context], pct: float, message: str) -> None:
+async def _progress(ctx: Context | None, pct: float, message: str) -> None:
     """Best-effort progress notification. Safe when no Context is present
     (e.g. unit tests that call do_* methods directly).
     """
@@ -38,10 +38,10 @@ async def _progress(ctx: Optional[Context], pct: float, message: str) -> None:
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("Progress notification failed: %s", exc)
 
-_server: "ClaudeVisionMCPServer | None" = None
+_server: ClaudeVisionMCPServer | None = None
 
 
-def _get_server() -> "ClaudeVisionMCPServer":
+def _get_server() -> ClaudeVisionMCPServer:
     if _server is None:
         raise RuntimeError(
             "ClaudeVisionMCPServer not initialized. "
@@ -108,7 +108,7 @@ class ClaudeVisionMCPServer:
         self.code_extractor = CodeExtractor(self.agent, config)
 
     @staticmethod
-    def _resolve_strategy(mode: str) -> "SelectionStrategy | None":
+    def _resolve_strategy(mode: str) -> SelectionStrategy | None:
         """Map a user-facing *mode* string to a :class:`SelectionStrategy`.
 
         ``"auto"`` (or anything unrecognized) returns ``None`` so the
@@ -122,7 +122,7 @@ class ClaudeVisionMCPServer:
             "uniform": SelectionStrategy.UNIFORM,
             "keyframe": SelectionStrategy.KEYFRAME,
         }
-        return mapping.get(mode_normalized, None)
+        return mapping.get(mode_normalized)
 
     async def _process_video(
         self,
@@ -132,7 +132,7 @@ class ClaudeVisionMCPServer:
         style: str = "detailed",
         mode: str = "auto",
         skip_audio: bool = False,
-        ctx: Optional[Context] = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Process a video through the full pipeline."""
         loop = asyncio.get_event_loop()
@@ -239,7 +239,7 @@ class ClaudeVisionMCPServer:
         source: str,
         query: str = "",
         mode: str = "auto",
-        ctx: Optional[Context] = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         result = await self._process_video(
             source=source,
@@ -260,7 +260,7 @@ class ClaudeVisionMCPServer:
         }
 
     async def do_video_extract_code(
-        self, source: str, ctx: Optional[Context] = None
+        self, source: str, ctx: Context | None = None
     ) -> dict[str, Any]:
         loop = asyncio.get_event_loop()
 
@@ -319,7 +319,7 @@ class ClaudeVisionMCPServer:
         source: str,
         style: str = "detailed",
         mode: str = "auto",
-        ctx: Optional[Context] = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         result = await self._process_video(
             source=source,
@@ -350,7 +350,7 @@ class ClaudeVisionMCPServer:
         source: str,
         description: str = "",
         mode: str = "auto",
-        ctx: Optional[Context] = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         result = await self._process_video(
             source=source,
@@ -425,7 +425,7 @@ class ClaudeVisionMCPServer:
         }
 
     async def do_video_extract_text(
-        self, source: str, query: str = "", ctx: Optional[Context] = None
+        self, source: str, query: str = "", ctx: Context | None = None
     ) -> dict[str, Any]:
         """OCR-focused tool: read all visible text from a video.
 
@@ -496,7 +496,7 @@ class ClaudeVisionMCPServer:
 
 @mcp.tool()
 async def video_analyze(
-    source: str, query: str = "", mode: str = "auto", ctx: Optional[Context] = None
+    source: str, query: str = "", mode: str = "auto", ctx: Context | None = None
 ) -> dict[str, Any]:
     """Analyze a video and answer questions about its content.
 
@@ -519,7 +519,7 @@ async def video_analyze(
 
 @mcp.tool()
 async def video_extract_code(
-    source: str, ctx: Optional[Context] = None
+    source: str, ctx: Context | None = None
 ) -> dict[str, Any]:
     """Extract code from a coding tutorial video.
 
@@ -541,7 +541,7 @@ async def video_summarize(
     source: str,
     style: str = "detailed",
     mode: str = "auto",
-    ctx: Optional[Context] = None,
+    ctx: Context | None = None,
 ) -> dict[str, Any]:
     """Generate a summary of a video.
 
@@ -564,7 +564,7 @@ async def video_find_bugs(
     source: str,
     description: str = "",
     mode: str = "auto",
-    ctx: Optional[Context] = None,
+    ctx: Context | None = None,
 ) -> dict[str, Any]:
     """Analyze a screen recording for bugs and issues.
 
@@ -605,7 +605,7 @@ async def video_find_source_repo(source: str) -> dict[str, Any]:
 
 @mcp.tool()
 async def video_extract_text(
-    source: str, query: str = "", ctx: Optional[Context] = None
+    source: str, query: str = "", ctx: Context | None = None
 ) -> dict[str, Any]:
     """Extract all visible text from a video (OCR mode).
 

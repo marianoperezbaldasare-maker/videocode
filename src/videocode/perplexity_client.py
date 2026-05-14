@@ -11,7 +11,6 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 import httpx
 
@@ -34,7 +33,7 @@ class CodeVerificationResult:
     """Result of verifying extracted code."""
     is_valid: bool
     issues: list[dict]
-    fixed_code: Optional[str]
+    fixed_code: str | None
     explanation: str
     references: list[str]
 
@@ -49,7 +48,7 @@ class PerplexityClient:
         "sonar-reasoning": "sonar-reasoning",  # Mejor para razonamiento
     }
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "sonar-pro"):
+    def __init__(self, api_key: str | None = None, model: str = "sonar-pro"):
         self.api_key = api_key or os.environ.get("PERPLEXITY_API_KEY")
         if not self.api_key:
             raise ValueError(
@@ -75,13 +74,13 @@ class PerplexityClient:
             logger.warning("Perplexity not available: %s", e)
             return False
 
-    def chat(self, message: str, system_prompt: Optional[str] = None) -> PerplexityResult:
+    def chat(self, message: str, system_prompt: str | None = None) -> PerplexityResult:
         """Send a chat message to Perplexity.
-        
+
         Args:
             message: User message
             system_prompt: Optional system prompt
-            
+
         Returns:
             PerplexityResult with response and citations
         """
@@ -109,14 +108,14 @@ class PerplexityClient:
 
     def verify_code(self, code: str, language: str) -> CodeVerificationResult:
         """Verify extracted code for correctness.
-        
+
         Uses Perplexity to check if the code is valid, find errors,
         and suggest fixes with documentation references.
-        
+
         Args:
             code: The extracted code to verify
             language: Programming language
-            
+
         Returns:
             CodeVerificationResult with validation status and fixes
         """
@@ -144,9 +143,9 @@ class PerplexityClient:
                 content = content.split("```json")[1].split("```")[0]
             elif "```" in content:
                 content = content.split("```")[1].split("```")[0]
-            
+
             data = json.loads(content.strip())
-            
+
             return CodeVerificationResult(
                 is_valid=data.get("is_valid", False),
                 issues=data.get("issues", []),
@@ -167,10 +166,10 @@ class PerplexityClient:
 
     def find_documentation(self, query: str) -> PerplexityResult:
         """Search for documentation about a programming topic.
-        
+
         Args:
             query: Search query (e.g., "React useState hook documentation")
-            
+
         Returns:
             PerplexityResult with documentation and sources
         """
@@ -185,18 +184,18 @@ class PerplexityClient:
 
     def generate_setup_instructions(self, framework: str, dependencies: list[str]) -> str:
         """Generate setup instructions for a project.
-        
+
         Args:
             framework: Main framework (e.g., "React", "Django")
             dependencies: List of dependencies detected
-            
+
         Returns:
             Markdown-formatted setup instructions
         """
         logger.info("Generating setup instructions for %s", framework)
 
         deps_str = "\n".join(f"- {d}" for d in dependencies)
-        
+
         result = self.chat(
             f"Generate setup instructions for a {framework} project with these dependencies:\n"
             f"{deps_str}\n\n"
@@ -209,12 +208,12 @@ class PerplexityClient:
 
     def fix_code_errors(self, code: str, error_message: str, language: str) -> str:
         """Fix code errors based on an error message.
-        
+
         Args:
             code: The code with errors
             error_message: The error message
             language: Programming language
-            
+
         Returns:
             Fixed code
         """
@@ -240,16 +239,16 @@ class PerplexityClient:
                     if lines and lines[0].strip().lower() == language.lower():
                         return "\n".join(lines[1:])
                     return part
-        
+
         return content
 
-    def get_framework_info(self, framework: str, version: Optional[str] = None) -> dict:
+    def get_framework_info(self, framework: str, version: str | None = None) -> dict:
         """Get information about a framework/library.
-        
+
         Args:
             framework: Framework name (e.g., "React", "Vue")
             version: Specific version (optional)
-            
+
         Returns:
             Dict with framework info
         """
@@ -287,7 +286,7 @@ class PerplexityClient:
         self.client.close()
 
 
-def create_perplexity_client_from_env() -> Optional[PerplexityClient]:
+def create_perplexity_client_from_env() -> PerplexityClient | None:
     """Create PerplexityClient from environment variable if available."""
     key = os.environ.get("PERPLEXITY_API_KEY")
     if key:

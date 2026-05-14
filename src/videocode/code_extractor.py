@@ -8,10 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
-from pathlib import Path
-from typing import List, Optional
 
 from videocode.agent_loop import AgentLoop
 from videocode.types import (
@@ -36,7 +33,7 @@ except ImportError:
     _HAS_PERPLEXITY = False
 
 try:
-    from videocode.apify_client import ApifyClient, create_apify_client_from_env
+    from videocode.apify_client import create_apify_client_from_env  # noqa: F401
     _HAS_APIFY = True
 except ImportError:
     _HAS_APIFY = False
@@ -110,7 +107,7 @@ _ASSEMBLE_PROJECT_PROMPT = (
 # ---------------------------------------------------------------------------
 
 
-def _extract_code_blocks(text: str) -> List[str]:
+def _extract_code_blocks(text: str) -> list[str]:
     """Extract all markdown code blocks from *text*."""
     pattern = r"```(?:\w+)?\n(.*?)\n```"
     return re.findall(pattern, text, re.DOTALL)
@@ -191,7 +188,7 @@ def _guess_language_from_code(code: str) -> str:
             r":\s*(flex|grid|block|none)",
         ],
     }
-    scores: dict[str, int] = {lang: 0 for lang in patterns}
+    scores: dict[str, int] = dict.fromkeys(patterns, 0)
     for lang, regexes in patterns.items():
         for pat in regexes:
             if re.search(pat, code, re.MULTILINE):
@@ -222,7 +219,7 @@ class CodeExtractor:
         self.config = config
         self.perplexity = self._init_perplexity()
 
-    def _init_perplexity(self) -> Optional[PerplexityClient]:
+    def _init_perplexity(self) -> PerplexityClient | None:
         """Initialize Perplexity client if API key is available."""
         if not _HAS_PERPLEXITY:
             return None
@@ -267,7 +264,7 @@ class CodeExtractor:
             )
 
         # 2. Extract code from each frame
-        code_blocks: List[CodeBlock] = []
+        code_blocks: list[CodeBlock] = []
         for cf in code_frames:
             try:
                 raw = self.extract_code_from_frame(cf.frame)
@@ -316,7 +313,7 @@ class CodeExtractor:
     # Step 1: detect code frames
     # ------------------------------------------------------------------
 
-    def detect_code_frames(self, frames: List[Frame]) -> List[CodeFrame]:
+    def detect_code_frames(self, frames: list[Frame]) -> list[CodeFrame]:
         """Ask the VLM which *frames* contain code.
 
         Returns a list of :class:`CodeFrame` objects with inferred language
@@ -325,14 +322,14 @@ class CodeExtractor:
         if not frames:
             return []
 
-        task = Task(type=TaskType.CODE_EXTRACTION, query="detect code frames")
+        Task(type=TaskType.CODE_EXTRACTION, query="detect code frames")
         resp = self.agent.vlm.analyze_frames(frames, _DETECT_CODE_PROMPT)
 
         return self._parse_code_frame_response(resp.content, frames)
 
-    def _parse_code_frame_response(self, content: str, frames: List[Frame]) -> List[CodeFrame]:
+    def _parse_code_frame_response(self, content: str, frames: list[Frame]) -> list[CodeFrame]:
         """Parse the JSON array returned by the VLM."""
-        code_frames: List[CodeFrame] = []
+        code_frames: list[CodeFrame] = []
         try:
             json_str = _extract_json_block(content)
             # If it's wrapped in ```json … ``` the regex above already extracted
@@ -378,7 +375,7 @@ class CodeExtractor:
     # Step 3: assemble project
     # ------------------------------------------------------------------
 
-    def assemble_project(self, code_blocks: List[CodeBlock], context: str) -> CodeResult:
+    def assemble_project(self, code_blocks: list[CodeBlock], context: str) -> CodeResult:
         """Organise *code_blocks* into files and generate a README.
 
         Uses the VLM to infer filenames, project structure, and setup
@@ -394,7 +391,7 @@ class CodeExtractor:
             )
 
         # Build a compact representation of the blocks
-        block_texts: List[str] = []
+        block_texts: list[str] = []
         for i, block in enumerate(code_blocks):
             lang_tag = block.language or ""
             block_texts.append(
@@ -461,7 +458,7 @@ class CodeExtractor:
             logger.warning("Perplexity verification failed: %s", e)
             return result
 
-    def _extract_dependencies(self, files: dict[str, str], language: str) -> List[str]:
+    def _extract_dependencies(self, files: dict[str, str], language: str) -> list[str]:
         """Extract dependency names from source files."""
         deps = set()
         if language == "python":
@@ -476,7 +473,7 @@ class CodeExtractor:
                         deps.add(dep.split("/")[0])
         return sorted(deps)
 
-    def _parse_assembly_response(self, content: str, code_blocks: List[CodeBlock]) -> CodeResult:
+    def _parse_assembly_response(self, content: str, code_blocks: list[CodeBlock]) -> CodeResult:
         """Parse the JSON project structure from the VLM response."""
         try:
             json_str = _extract_json_block(content)
@@ -488,9 +485,8 @@ class CodeExtractor:
             setup = data.get("setup_instructions", "")
             deps = data.get("dependencies", [])
 
-            if deps and "requirements.txt" not in files and "package.json" not in files:
-                if language == "python":
-                    files["requirements.txt"] = "\n".join(deps)
+            if deps and "requirements.txt" not in files and "package.json" not in files and language == "python":
+                files["requirements.txt"] = "\n".join(deps)
 
             confidence = 0.85 if len(files) > 1 else 0.6
 

@@ -10,7 +10,6 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Optional
 
 import httpx
 
@@ -40,7 +39,7 @@ class ApifyTranscriptionResult:
 class ApifyClient:
     """Client for Apify platform integration."""
 
-    def __init__(self, api_token: Optional[str] = None):
+    def __init__(self, api_token: str | None = None):
         self.api_token = api_token or os.environ.get("APIFY_API_TOKEN")
         if not self.api_token:
             raise ValueError(
@@ -63,11 +62,11 @@ class ApifyClient:
 
     def download_youtube_video(self, youtube_url: str, output_dir: str = "./downloads") -> ApifyVideoResult:
         """Download a YouTube video using Apify's YouTube downloader actor.
-        
+
         Args:
             youtube_url: Full YouTube URL
             output_dir: Where to save the downloaded video
-            
+
         Returns:
             ApifyVideoResult with video path and metadata
         """
@@ -92,7 +91,7 @@ class ApifyClient:
 
         item = dataset_items[0]
         video_path = os.path.join(output_dir, f"video_{int(time.time())}.mp4")
-        
+
         # Download the actual video file from the URL
         video_url = item.get("downloadUrl") or item.get("url")
         if video_url:
@@ -108,10 +107,10 @@ class ApifyClient:
 
     def transcribe_video(self, video_path: str) -> ApifyTranscriptionResult:
         """Transcribe video audio using Apify's Whisper actor.
-        
+
         Args:
             video_path: Path to local video file
-            
+
         Returns:
             ApifyTranscriptionResult with transcription text and segments
         """
@@ -146,10 +145,10 @@ class ApifyClient:
 
     def extract_video_metadata(self, youtube_url: str) -> dict:
         """Extract metadata from a YouTube video without downloading.
-        
+
         Args:
             youtube_url: Full YouTube URL
-            
+
         Returns:
             Dict with title, description, duration, viewCount, etc.
         """
@@ -183,12 +182,12 @@ class ApifyClient:
 
     def _run_actor(self, actor_id: str, run_input: dict, timeout_secs: int = 300) -> list:
         """Run an Apify actor and wait for results.
-        
+
         Args:
             actor_id: Actor identifier (e.g., 'streaming/youtube-downloader')
             run_input: Input parameters for the actor
             timeout_secs: Maximum time to wait
-            
+
         Returns:
             List of dataset items
         """
@@ -201,7 +200,7 @@ class ApifyClient:
         resp.raise_for_status()
         run_data = resp.json()
         run_id = run_data["data"]["id"]
-        
+
         logger.info("Apify actor run started: %s (run ID: %s)", actor_id, run_id)
 
         # Poll for completion
@@ -212,7 +211,7 @@ class ApifyClient:
                 headers={"Authorization": f"Bearer {self.api_token}"},
             )
             status = resp.json()["data"]["status"]
-            
+
             if status == "SUCCEEDED":
                 break
             elif status in ("FAILED", "ABORTED", "TIMED-OUT"):
@@ -226,7 +225,7 @@ class ApifyClient:
             headers={"Authorization": f"Bearer {self.api_token}"},
         )
         resp.raise_for_status()
-        
+
         items = resp.json()
         logger.info("Apify actor returned %d items", len(items))
         return items
@@ -245,7 +244,7 @@ class ApifyClient:
         self.client.close()
 
 
-def create_apify_client_from_env() -> Optional[ApifyClient]:
+def create_apify_client_from_env() -> ApifyClient | None:
     """Create ApifyClient from environment variable if available."""
     token = os.environ.get("APIFY_API_TOKEN")
     if token:

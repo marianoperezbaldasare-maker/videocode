@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import List, Optional
 
 from videocode.types import (
     AgentResult,
@@ -151,7 +150,7 @@ class Extractor:
         self.vlm = vlm
         self.config = config
 
-    def run(self, task: Task, video: ProcessedVideo) -> List[Frame]:
+    def run(self, task: Task, video: ProcessedVideo) -> list[Frame]:
         """Return the subset of *video.frames* relevant to *task*."""
         if not video.frames:
             return []
@@ -167,7 +166,7 @@ class Extractor:
         logger.info("Extractor: selected %d/%d frames", len(relevant), len(video.frames))
         return relevant
 
-    def _parse_frame_selection(self, content: str, all_frames: List[Frame]) -> List[Frame]:
+    def _parse_frame_selection(self, content: str, all_frames: list[Frame]) -> list[Frame]:
         """Parse the extractor JSON response and return matching frames."""
         try:
             json_str = _extract_json(content)
@@ -189,8 +188,8 @@ class Analyzer:
     def run(
         self,
         task: Task,
-        frames: List[Frame],
-        transcription: Optional[Transcription],
+        frames: list[Frame],
+        transcription: Transcription | None,
     ) -> str:
         """Analyze *frames* and return raw analysis text."""
         prompt_template = _ANALYZER_PROMPTS.get(task.type, _ANALYZER_PROMPTS[TaskType.GENERAL])
@@ -272,7 +271,7 @@ class AgentLoop:
 
     def extract_relevant_frames(
         self, task: Task, video: ProcessedVideo
-    ) -> tuple[List[Frame], List[SourceReference]]:
+    ) -> tuple[list[Frame], list[SourceReference]]:
         """Run the Extractor phase only: select frames relevant to *task*.
 
         Exposed separately so callers can run this in parallel with audio
@@ -299,9 +298,9 @@ class AgentLoop:
     def analyze_and_verify(
         self,
         task: Task,
-        relevant_frames: List[Frame],
-        sources: List[SourceReference],
-        transcription: Optional[Transcription] = None,
+        relevant_frames: list[Frame],
+        sources: list[SourceReference],
+        transcription: Transcription | None = None,
     ) -> AgentResult:
         """Run the Analyzer + Verifier loop on pre-extracted frames.
 
@@ -356,7 +355,7 @@ class AgentLoop:
         self,
         task: Task,
         video: ProcessedVideo,
-        transcription: Optional[Transcription] = None,
+        transcription: Transcription | None = None,
     ) -> AgentResult:
         """Execute the full 3-role pipeline sequentially.
 

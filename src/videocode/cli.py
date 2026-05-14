@@ -6,12 +6,10 @@ and running the MCP server with beautiful terminal output.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import shutil
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -24,7 +22,6 @@ from videocode.agent_loop import AgentLoop, Task, TaskType
 from videocode.audio_extractor import AudioExtractor
 from videocode.code_extractor import CodeExtractor
 from videocode.config import Config
-from videocode.frame_selector import FrameSelector, SelectionStrategy
 from videocode.mcp_server import ClaudeVisionMCPServer
 from videocode.video_processor import VideoProcessor
 from videocode.vlm_client import VLMClient
@@ -243,7 +240,7 @@ def code(
         except Exception as exc:
             console.print(f"[red]Error: {exc}[/red]")
             logger.exception("Code extraction failed")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from exc
 
         finally:
             video_processor.cleanup()
@@ -317,7 +314,7 @@ def summarize(
 
 @app.command(name="mcp")
 def mcp_server(
-    config_file: Optional[str] = typer.Option(
+    config_file: str | None = typer.Option(
         None, "--config", "-c", help="Path to configuration file"
     ),
 ) -> None:
@@ -326,12 +323,8 @@ def mcp_server(
     Starts the ClaudeVisionMCPServer with stdio transport for
     communication with Claude Code via the Model Context Protocol.
     """
-    if config_file:
-        config = Config.from_file(config_file)
-    else:
-        config = Config.from_env()
+    config = Config.from_file(config_file) if config_file else Config.from_env()
 
-    import sys
     from rich.console import Console
 
     err_console = Console(file=sys.stderr)
@@ -370,7 +363,7 @@ def status() -> None:
         import urllib.request
 
         req = urllib.request.Request(f"{ollama_url}/api/tags", method="GET")
-        with urllib.request.urlopen(req, timeout=2) as resp:
+        with urllib.request.urlopen(req, timeout=2):
             table.add_row("Ollama", "[green]Running[/green]", ollama_url)
     except Exception:
         table.add_row("Ollama", "[red]Unavailable[/red]", f"{ollama_url} unreachable")
