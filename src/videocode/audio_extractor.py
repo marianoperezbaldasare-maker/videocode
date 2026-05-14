@@ -14,47 +14,15 @@ import logging
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from videocode.types import Segment, Transcription  # noqa: F401
 
 if TYPE_CHECKING:
     from videocode.config import Config
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Data transfer objects
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class Segment:
-    """A single transcript segment with timing information."""
-
-    start: float
-    """Start time in seconds."""
-
-    end: float
-    """End time in seconds."""
-
-    text: str
-    """Transcribed text for this segment."""
-
-
-@dataclass
-class Transcription:
-    """Result of transcribing an audio track."""
-
-    text: str
-    """Full concatenated transcript text."""
-
-    segments: list[Segment] = field(default_factory=list)
-    """Individual timed segments."""
-
-    language: str = "en"
-    """Detected language code (ISO-639-1)."""
 
 
 # ---------------------------------------------------------------------------

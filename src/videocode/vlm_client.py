@@ -10,7 +10,7 @@ import json
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, cast
 
 from videocode.types import Config, Frame, Transcription, VLMResponse
 
@@ -56,9 +56,9 @@ def _frame_to_base64(frame: Frame, max_size: tuple[int, int] = (1024, 1024)) -> 
     except ImportError as err:  # pragma: no cover
         raise ImportError("Pillow is required for image encoding: pip install Pillow") from err
 
-    img = Image.open(frame.path)
+    img = Image.open(frame.path)  # type: ignore[assignment]
     if img.mode in ("RGBA", "P"):
-        img = img.convert("RGB")
+        img = img.convert("RGB")  # type: ignore[assignment]
 
     # Resize if too large
     w, h = img.size
@@ -66,7 +66,8 @@ def _frame_to_base64(frame: Frame, max_size: tuple[int, int] = (1024, 1024)) -> 
     if w > max_w or h > max_h:
         scale = min(max_w / w, max_h / h)
         new_size = (int(w * scale), int(h * scale))
-        img = img.resize(new_size, Image.LANCZOS)
+        resampling = getattr(Image, "Resampling", Image).LANCZOS  # type: ignore[attr-defined]
+        img = img.resize(new_size, resampling)  # type: ignore[assignment]
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -566,11 +567,11 @@ class DummyBackend(VLMBackend):
 # ---------------------------------------------------------------------------
 
 
-def _retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0):
+def _retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0) -> Any:
     """Decorator that retries a function with exponential backoff."""
 
-    def decorator(func):
-        def wrapper(*args, **kwargs):  # type: ignore[no-untyped-def]
+    def decorator(func: Any) -> Any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             last_exc: Exception | None = None
             for attempt in range(max_retries + 1):
                 try:
@@ -702,7 +703,7 @@ class VLMClient:
         def _call() -> VLMResponse:
             return self._backend.chat(images_b64, full_prompt)
 
-        response = _call()
+        response = cast(VLMResponse, _call())
         self._cache.put(frames, prompt, transcription, response)
         return response
 

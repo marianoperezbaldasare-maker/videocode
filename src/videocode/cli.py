@@ -104,7 +104,8 @@ def _process_with_progress(
                     progress.update(task_id, description="Extracting audio...")
                     audio_path = audio_extractor.extract(Path(source))
                     progress.update(task_id, description="Transcribing audio...")
-                    transcription = audio_extractor.transcribe(audio_path)
+                    if audio_path is not None:
+                        transcription = audio_extractor.transcribe(audio_path)
                 except Exception as exc:
                     console.print(
                         f"[yellow]Warning: Audio extraction skipped: {exc}[/yellow]"
@@ -228,7 +229,8 @@ def code(
                 try:
                     progress.update(task_id, description="Transcribing audio...")
                     audio_path = audio_extractor.extract(Path(source))
-                    transcription = audio_extractor.transcribe(audio_path)
+                    if audio_path is not None:
+                        transcription = audio_extractor.transcribe(audio_path)
                 except Exception as exc:
                     console.print(
                         f"[yellow]Warning: Audio extraction skipped: {exc}[/yellow]"

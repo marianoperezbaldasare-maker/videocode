@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
+from typing import Any, cast
 
 import httpx
 
@@ -270,7 +271,7 @@ class PerplexityClient:
                 content = content.split("```json")[1].split("```")[0]
             elif "```" in content:
                 content = content.split("```")[1].split("```")[0]
-            return json.loads(content.strip())
+            return cast(dict[Any, Any], json.loads(content.strip()))
         except (json.JSONDecodeError, KeyError) as e:
             logger.warning("Failed to parse framework info: %s", e)
             return {

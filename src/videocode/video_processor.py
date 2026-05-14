@@ -14,9 +14,10 @@ import os
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from videocode.types import Frame, ProcessedVideo, Scene  # noqa: F401
 
 # Persistent cache for downloaded remote videos. Keyed by SHA-256 of URL
 # so repeated runs against the same source are instant.
@@ -26,7 +27,7 @@ _VIDEO_EXTS = (".mp4", ".webm", ".mkv", ".mov", ".m4v", ".avi")
 
 if TYPE_CHECKING:
     from videocode.config import Config
-    from videocode.frame_selector import Frame, SelectionStrategy
+    from videocode.frame_selector import SelectionStrategy
 
 # Optional dependency: pyscenedetect
 try:
@@ -75,80 +76,6 @@ class VideoDownloadError(RuntimeError):
 
 
 # ---------------------------------------------------------------------------
-# Data transfer objects
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class Scene:
-    """A contiguous scene detected inside a video."""
-
-    start: float
-    """Start time in seconds."""
-
-    end: float
-    """End time in seconds."""
-
-    index: int
-    """Zero-based scene index."""
-
-
-@dataclass
-class Frame:
-    """A single extracted frame with associated metadata."""
-
-    path: Path
-    """Filesystem path to the extracted JPEG image."""
-
-    timestamp: float
-    """Position in the video (seconds)."""
-
-    scene_index: int = -1
-    """Index of the scene this frame belongs to, or ``-1`` if unassigned."""
-
-    is_keyframe: bool = False
-    """Whether this frame corresponds to an FFmpeg keyframe."""
-
-
-@dataclass
-class ProcessedVideo:
-    """Result of processing a video source."""
-
-    source: str
-    """Original source string (file path or URL)."""
-
-    duration: float
-    """Video duration in seconds."""
-
-    fps: float
-    """Average frames per second."""
-
-    resolution: tuple[int, int]
-    """Video resolution as ``(width, height)``."""
-
-    frames: list[Frame]
-    """List of extracted / selected frames."""
-
-    frame_dir: Path
-    """Directory containing the extracted frame images."""
-
-    audio_path: Path | None = None
-    """Path to the extracted audio WAV file, if any."""
-
-    scenes: list[Scene] = field(default_factory=list)
-    """Detected scene boundaries, if scene detection was performed."""
-
-    local_path: Path | None = None
-    """Filesystem path to the (possibly downloaded) video file.
-
-    For local sources this equals ``Path(source)``. For remote URLs it
-    points to the file fetched into the download cache. Use this — not
-    ``source`` — when feeding the video to other tools like ffmpeg or
-    Whisper, since ``source`` may be a URL that has no local presence.
-    """
-
-
-# ---------------------------------------------------------------------------
 # Core processor
 # ---------------------------------------------------------------------------
 
@@ -176,7 +103,7 @@ class VideoProcessor:
     def process(
         self,
         source: str | Path,
-        strategy: SelectionStrategy = None,  # type: ignore[assignment]
+        strategy: SelectionStrategy | None = None,
     ) -> ProcessedVideo:
         """Process a video source end-to-end.
 

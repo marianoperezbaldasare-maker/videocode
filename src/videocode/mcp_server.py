@@ -62,7 +62,7 @@ def _check_ollama(url: str = "http://localhost:11434") -> bool:
 
         req = urllib.request.Request(f"{url}/api/tags", method="GET")
         with urllib.request.urlopen(req, timeout=2) as resp:
-            return resp.status == 200
+            return bool(resp.status == 200)
     except Exception:
         return False
 
@@ -168,6 +168,8 @@ class ClaudeVisionMCPServer:
                 audio_path = await loop.run_in_executor(
                     None, self.audio_extractor.extract, video_file
                 )
+                if audio_path is None:
+                    return None
                 await _progress(ctx, 55.0, "Transcribing audio with Whisper")
                 return await loop.run_in_executor(
                     None, self.audio_extractor.transcribe, audio_path
@@ -287,9 +289,10 @@ class ClaudeVisionMCPServer:
                     None, self.audio_extractor.extract, video_file
                 )
                 await _progress(ctx, 50.0, "Transcribing audio with Whisper")
-                transcription = await loop.run_in_executor(
-                    None, self.audio_extractor.transcribe, audio_path
-                )
+                if audio_path is not None:
+                    transcription = await loop.run_in_executor(
+                        None, self.audio_extractor.transcribe, audio_path
+                    )
             except Exception as exc:
                 logger.warning("Audio extraction failed (non-fatal): %s", exc)
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from typing import Any, cast
 
 from videocode.agent_loop import AgentLoop
 from videocode.types import (
@@ -232,7 +233,7 @@ class CodeExtractor:
     # High-level entry point
     # ------------------------------------------------------------------
 
-    def extract(self, video: ProcessedVideo, transcription: Transcription) -> CodeResult:
+    def extract(self, video: ProcessedVideo, transcription: Transcription | None) -> CodeResult:
         """Run the full tutorial-to-code pipeline.
 
         Parameters
@@ -340,7 +341,7 @@ class CodeExtractor:
             if isinstance(data, list):
                 items = data
             elif isinstance(data, dict):
-                items = data.get("relevant_frames", data.get("frames", []))
+                items = cast(list[dict[str, Any]], data.get("relevant_frames", data.get("frames", [])))
 
             for item in items:
                 idx = item.get("index", -1)
@@ -418,6 +419,7 @@ class CodeExtractor:
 
     def _verify_with_perplexity(self, result: CodeResult) -> CodeResult:
         """Verify extracted code with Perplexity and improve setup instructions."""
+        assert self.perplexity is not None, "_verify_with_perplexity called without perplexity client"
         try:
             logger.info("Verifying code with Perplexity...")
 

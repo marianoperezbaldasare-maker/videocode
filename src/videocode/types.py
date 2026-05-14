@@ -20,7 +20,8 @@ class Frame:
 
     path: Path
     timestamp: float  # seconds
-    scene_index: int = 0
+    scene_index: int = -1
+    """Index of the scene this frame belongs to, or ``-1`` if unassigned."""
     is_keyframe: bool = False
 
 
@@ -44,6 +45,10 @@ class ProcessedVideo:
     frames: list[Frame]
     frame_dir: Path
     audio_path: Path | None = None
+    scenes: list[Scene] = field(default_factory=list)
+    """Detected scene boundaries, if scene detection was performed."""
+    local_path: Path | None = None
+    """Filesystem path to the (possibly downloaded) video file."""
 
 
 # ---------------------------------------------------------------------------

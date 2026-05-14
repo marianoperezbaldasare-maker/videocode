@@ -10,6 +10,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
+from typing import Any, cast
 
 import httpx
 
@@ -226,7 +227,7 @@ class ApifyClient:
         )
         resp.raise_for_status()
 
-        items = resp.json()
+        items = cast(list[Any], resp.json())
         logger.info("Apify actor returned %d items", len(items))
         return items
 
