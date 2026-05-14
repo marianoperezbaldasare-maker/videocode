@@ -1,5 +1,6 @@
 # 👁️ videocode
 
+[![CI](https://github.com/marianoperezbaldasare-maker/videocode/actions/workflows/ci.yml/badge.svg)](https://github.com/marianoperezbaldasare-maker/videocode/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
@@ -344,7 +345,7 @@ videocode --help
 
 **Current version: v0.1.0** — Early release, core extraction pipeline working.
 
-This is a new project. The core pipeline (video → frames → VLM → code) is solid. We're actively improving accuracy and adding backends. Expect rough edges — and please [open issues](https://github.com/videocode/videocode/issues) when you hit them.
+This is a new project. The core pipeline (video → frames → VLM → code) is solid. We're actively improving accuracy and adding backends. Expect rough edges — and please [open issues](https://github.com/marianoperezbaldasare-maker/videocode/issues) when you hit them.
 
 **What's working:**
 - ✅ Video input (file, YouTube URL with persistent local cache)
@@ -384,7 +385,7 @@ If you've ever:
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=videocode/videocode&type=Date)](https://star-history.com/#videocode/videocode&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=marianoperezbaldasare-maker/videocode&type=Date)](https://star-history.com/#marianoperezbaldasare-maker/videocode&Date)
 
 ## Related Projects
 
