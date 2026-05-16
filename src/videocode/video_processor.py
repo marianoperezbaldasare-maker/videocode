@@ -222,6 +222,18 @@ class VideoProcessor:
                 )
                 continue
 
+            # ffmpeg can exit 0 yet write no file when -ss lands past the
+            # last decodable frame (it prints "Output file is empty, nothing
+            # was encoded" to stderr but still returns 0). Verify the file
+            # actually materialized before trusting it.
+            if not out_path.exists() or out_path.stat().st_size == 0:
+                logger.warning(
+                    "FFmpeg returned 0 but produced no frame @ %.2fs "
+                    "(likely past end of video) — skipping",
+                    ts,
+                )
+                continue
+
             frames.append(Frame(path=out_path, timestamp=ts))
 
         logger.info("Extracted %d/%d frames", len(frames), len(timestamps))
