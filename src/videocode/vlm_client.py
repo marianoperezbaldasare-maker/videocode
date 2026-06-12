@@ -215,8 +215,17 @@ class GeminiBackend(VLMBackend):
     """
 
     def __init__(self, api_key: str, model: str) -> None:
+        import os
+
         self.api_key = api_key
         self.model_name = model
+        # Hard per-request deadline. The (deprecated) google.generativeai SDK
+        # has no default timeout and retries quota errors internally, so a
+        # single call can silently hang for 10+ minutes — long enough that an
+        # MCP client kills the whole server (~1000s) and the caller only sees
+        # "Connection closed". Failing fast here lets our own bounded retry
+        # (and the caller) react with a real error message instead.
+        self._timeout = float(os.environ.get("VIDEOCODE_VLM_TIMEOUT", "120"))
         self._configure()
 
     def _configure(self) -> None:
@@ -245,6 +254,7 @@ class GeminiBackend(VLMBackend):
         response = self._model.generate_content(
             contents,
             generation_config={"temperature": 0.3, "max_output_tokens": 4096},
+            request_options={"timeout": self._timeout},
         )
         text = response.text if hasattr(response, "text") else str(response)
         token_count = 0

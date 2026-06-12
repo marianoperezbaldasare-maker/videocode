@@ -182,6 +182,35 @@ class TestGeminiBackend:
             assert resp.tokens_used == 42
             assert resp.frames_analyzed == 1
 
+    def test_chat_passes_request_timeout(self) -> None:
+        """Without a per-request timeout the deprecated SDK can hang past the
+        MCP client's ~1000s kill threshold (observed as 'Connection closed')."""
+        mock_genai, mock_model_cls = self._mock_genai_module()
+        mock_model = MagicMock()
+        mock_model.generate_content.return_value = MagicMock(text="ok")
+        mock_model_cls.return_value = mock_model
+
+        with patch.dict("sys.modules", {"google.generativeai": mock_genai}):
+            be = GeminiBackend("api-key", "gemini-1.5-pro")
+            be.chat([], "describe this")
+
+        kwargs = mock_model.generate_content.call_args.kwargs
+        assert kwargs.get("request_options") == {"timeout": 120.0}
+
+    def test_chat_timeout_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("VIDEOCODE_VLM_TIMEOUT", "45")
+        mock_genai, mock_model_cls = self._mock_genai_module()
+        mock_model = MagicMock()
+        mock_model.generate_content.return_value = MagicMock(text="ok")
+        mock_model_cls.return_value = mock_model
+
+        with patch.dict("sys.modules", {"google.generativeai": mock_genai}):
+            be = GeminiBackend("api-key", "gemini-1.5-pro")
+            be.chat([], "describe this")
+
+        kwargs = mock_model.generate_content.call_args.kwargs
+        assert kwargs.get("request_options") == {"timeout": 45.0}
+
     def test_is_available(self) -> None:
         mock_genai, _ = self._mock_genai_module()
         mock_model_info = MagicMock()
