@@ -197,7 +197,8 @@ class TestExtractFrames:
                     pass
                 elif arg.endswith(".jpg"):
                     Path(arg).parent.mkdir(parents=True, exist_ok=True)
-                    Path(arg).touch()
+                    # Non-empty: extract_frames discards 0-byte outputs
+                    Path(arg).write_bytes(b"\xff\xd8\xff\xe0fake-jpeg")
             return mock
 
         with patch("videocode.video_processor.shutil.which", return_value="/usr/bin/ffmpeg"):
@@ -225,7 +226,8 @@ class TestExtractFrames:
                 for arg in cmd:
                     if arg.endswith(".jpg"):
                         Path(arg).parent.mkdir(parents=True, exist_ok=True)
-                        Path(arg).touch()
+                        # Non-empty: extract_frames discards 0-byte outputs
+                        Path(arg).write_bytes(b"\xff\xd8\xff\xe0fake-jpeg")
             else:
                 mock.returncode = 1
                 mock.stderr = "codec error"

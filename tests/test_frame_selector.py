@@ -71,7 +71,9 @@ def _mock_ffmpeg(cmd: list, **kwargs: Any) -> MagicMock:
     for i, arg in enumerate(cmd):
         if arg.endswith(".jpg"):
             Path(arg).parent.mkdir(parents=True, exist_ok=True)
-            Path(arg).touch()
+            # Non-empty: extract_frames discards 0-byte outputs (ffmpeg
+            # "exit 0 but nothing encoded" guard), so touch() is not enough.
+            Path(arg).write_bytes(b"\xff\xd8\xff\xe0fake-jpeg")
     return mock
 
 
